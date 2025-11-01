@@ -126,3 +126,28 @@ All colors MUST be HSL.
     letter-spacing: var(--tracking-normal);
   }
 }
+
+@layer components {
+  /* Mobile sidebar fix - ensure proper contrast in all themes */
+  [data-sidebar="sidebar"][data-mobile="true"] {
+    background: hsl(220, 15%, 25%) !important;  /* Darker background */
+    color: hsl(0, 0%, 100%) !important;        /* White text */
+  }
+
+  /* Ensure text elements in mobile sidebar are white */
+  [data-sidebar="sidebar"][data-mobile="true"] a,
+  [data-sidebar="sidebar"][data-mobile="true"] button,
+  [data-sidebar="sidebar"][data-mobile="true"] span,
+  [data-sidebar="sidebar"][data-mobile="true"] div {
+    color: hsl(0, 0%, 100%) !important;
+  }
+  
+  /* Style for active/selected menu items in mobile sidebar - purple like dark theme */
+  [data-sidebar="sidebar"][data-mobile="true"] [data-active="true"],
+  [data-sidebar="sidebar"][data-mobile="true"] .data-[active=true],
+  [data-sidebar="sidebar"][data-mobile="true"] a[aria-current="page"],
+  [data-sidebar="sidebar"][data-mobile="true"] a[aria-current="true"] {
+    background: hsl(252.8926, 55.7604%, 57.4510%) !important; /* Purple background */
+    color: hsl(0, 0%, 100%) !important;                         /* White text */
+  }
+}
