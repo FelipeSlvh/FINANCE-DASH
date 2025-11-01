@@ -495,25 +495,42 @@ const Dashboard = () => {
                                       data_pagamento_recebimento: new Date().toISOString().split('T')[0] 
                                     });
                                     
-                                    // Se a conta tiver uma conta_financeira_id, criar uma saída correspondente
-                                    if (conta.conta_financeira_id) {
-                                      await createSaida({
-                                        descricao: `Pagamento - ${conta.descricao}`,
-                                        valor: Number(conta.valor),
-                                        data: new Date().toISOString().split('T')[0],
-                                        categoria_id: conta.categoria_id,
-                                        conta_financeira_id: conta.conta_financeira_id,
-                                        whatsapp: conta.whatsapp || null
-                                      });
+                                    // Verificar se já existe uma saída correspondente para evitar duplicidade
+                                    const saidas = await getSaidas();
+                                    const saidaExistente = saidas.find(s => 
+                                      s.descricao.includes(`Pagamento - ${conta.descricao}`) && 
+                                      Math.abs(Number(s.valor) - Number(conta.valor)) < 0.01
+                                    );
+                                    
+                                    // Se não existe saída correspondente, criar uma nova
+                                    if (!saidaExistente) {
+                                      // Se a conta tiver uma conta_financeira_id, criar uma saída correspondente
+                                      if (conta.conta_financeira_id) {
+                                        await createSaida({
+                                          descricao: `Pagamento - ${conta.descricao}`,
+                                          valor: Number(conta.valor),
+                                          data: new Date().toISOString().split('T')[0],
+                                          categoria_id: conta.categoria_id,
+                                          conta_financeira_id: conta.conta_financeira_id,
+                                          whatsapp: conta.whatsapp || null
+                                        });
+                                      } else {
+                                        // Criar saída sem conta financeira específica
+                                        await createSaida({
+                                          descricao: `Pagamento - ${conta.descricao}`,
+                                          valor: Number(conta.valor),
+                                          data: new Date().toISOString().split('T')[0],
+                                          categoria_id: conta.categoria_id,
+                                          conta_financeira_id: null,
+                                          whatsapp: conta.whatsapp || null
+                                        });
+                                      }
                                     } else {
-                                      // Criar saída sem conta financeira específica
-                                      await createSaida({
-                                        descricao: `Pagamento - ${conta.descricao}`,
-                                        valor: Number(conta.valor),
-                                        data: new Date().toISOString().split('T')[0],
-                                        categoria_id: conta.categoria_id,
-                                        conta_financeira_id: null,
-                                        whatsapp: conta.whatsapp || null
+                                      // Se já existe, mostrar aviso
+                                      toast({
+                                        title: "Aviso",
+                                        description: "Esta conta já está registrada como paga.",
+                                        variant: "default",
                                       });
                                     }
                                     
@@ -661,25 +678,42 @@ const Dashboard = () => {
                                       data_pagamento_recebimento: new Date().toISOString().split('T')[0] 
                                     });
                                     
-                                    // Se a conta tiver uma conta_financeira_id, criar uma entrada correspondente
-                                    if (conta.conta_financeira_id) {
-                                      await createEntrada({
-                                        descricao: `Recebimento - ${conta.descricao}`,
-                                        valor: Number(conta.valor),
-                                        data: new Date().toISOString().split('T')[0],
-                                        categoria_id: conta.categoria_id,
-                                        conta_financeira_id: conta.conta_financeira_id,
-                                        whatsapp: conta.whatsapp || null
-                                      });
+                                    // Verificar se já existe uma entrada correspondente para evitar duplicidade
+                                    const entradas = await getEntradas();
+                                    const entradaExistente = entradas.find(e => 
+                                      e.descricao.includes(`Recebimento - ${conta.descricao}`) && 
+                                      Math.abs(Number(e.valor) - Number(conta.valor)) < 0.01
+                                    );
+                                    
+                                    // Se não existe entrada correspondente, criar uma nova
+                                    if (!entradaExistente) {
+                                      // Se a conta tiver uma conta_financeira_id, criar uma entrada correspondente
+                                      if (conta.conta_financeira_id) {
+                                        await createEntrada({
+                                          descricao: `Recebimento - ${conta.descricao}`,
+                                          valor: Number(conta.valor),
+                                          data: new Date().toISOString().split('T')[0],
+                                          categoria_id: conta.categoria_id,
+                                          conta_financeira_id: conta.conta_financeira_id,
+                                          whatsapp: conta.whatsapp || null
+                                        });
+                                      } else {
+                                        // Criar entrada sem conta financeira específica
+                                        await createEntrada({
+                                          descricao: `Recebimento - ${conta.descricao}`,
+                                          valor: Number(conta.valor),
+                                          data: new Date().toISOString().split('T')[0],
+                                          categoria_id: conta.categoria_id,
+                                          conta_financeira_id: null,
+                                          whatsapp: conta.whatsapp || null
+                                        });
+                                      }
                                     } else {
-                                      // Criar entrada sem conta financeira específica
-                                      await createEntrada({
-                                        descricao: `Recebimento - ${conta.descricao}`,
-                                        valor: Number(conta.valor),
-                                        data: new Date().toISOString().split('T')[0],
-                                        categoria_id: conta.categoria_id,
-                                        conta_financeira_id: null,
-                                        whatsapp: conta.whatsapp || null
+                                      // Se já existe, mostrar aviso
+                                      toast({
+                                        title: "Aviso",
+                                        description: "Esta conta já está registrada como recebida.",
+                                        variant: "default",
                                       });
                                     }
                                     

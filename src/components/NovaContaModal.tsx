@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Categoria, createConta, updateConta, getCategorias, Conta } from "@/integrations/supabase/queries";
+import { Categoria, createConta, updateConta, getCategorias, Conta, getEntradas, getEntradasPorPeriodo, Entrada, deleteEntrada, Saida, getContasAReceber, getContasAPagar, deleteSaida, createEntrada, createSaida } from "@/integrations/supabase/queries";
 import { v4 as uuidv4 } from 'uuid';
 import { useEffect, useState } from "react";
 
@@ -156,91 +156,158 @@ export const NovaContaModal = ({ isOpen, onClose, onSuccess, conta, tipo }: Nova
         grupo_parcelamento_id: conta?.grupo_parcelamento_id || null
       });
 
-      if (conta && conta.id) {
-        // Modo edição - atualizar a conta existente
-        // Permitir edição mesmo que o número de parcelas seja maior que 1
-        // (ex: editar uma parcela específica de um grupo de parcelas)
-        const contaData = {
-          descricao: descricao,
-          valor: valorTotal,
-          data_vencimento: dataVencimento,
-          tipo: tipo,
-          status: status,
-          categoria_id: parseInt(categoriaId),
-          whatsapp: whatsapp || null,
-          grupo_parcelamento_id: conta.grupo_parcelamento_id || null
-        };
+      // Modo edição - atualizar a conta existente
+      // Permitir edição mesmo que o número de parcelas seja maior que 1
+      // (ex: editar uma parcela específica de um grupo de parcelas)
+      const contaData = {
+        descricao: descricao,
+        valor: valorTotal,
+        data_vencimento: dataVencimento,
+        tipo: tipo,
+        status: status,
+        categoria_id: parseInt(categoriaId),
+        whatsapp: whatsapp || null,
+        grupo_parcelamento_id: conta?.grupo_parcelamento_id || null
+      };
 
-        console.log('Atualizando conta com ID:', conta.id);
-        console.log('Dados para atualização:', contaData);
+      console.log('Atualizando conta com ID:', conta?.id);
+      console.log('Dados para atualização:', contaData);
+      
+      const resultado = await updateConta(conta!.id!, contaData);
+      console.log('Conta atualizada com sucesso:', resultado);
+      toast({
+        title: "Sucesso",
+        description: "Conta atualizada com sucesso!",
+      });
+      
+      // Após atualizar a conta, verificar se é necessário remover entradas/saídas relacionadas
+      // quando o status muda de 'recebida'/'paga' de volta para 'pendente'
+      if (conta && conta.id && conta.status) {
+        // Usar a descrição da conta original para procurar registros, 
+        // uma vez que é assim que o registro foi criado originalmente
+        const descricaoOriginal = conta.descricao || descricao;
         
-        const resultado = await updateConta(conta.id, contaData);
-        console.log('Conta atualizada com sucesso:', resultado);
-        toast({
-          title: "Sucesso",
-          description: "Conta atualizada com sucesso!",
-        });
-      } else {
-        // Modo criação - lógica de parcelamento
-        if (numeroParcelasInt > 1) {
-          console.log('Criando conta com parcelamento:', numeroParcelasInt, 'parcelas');
-          
-          // Calcular o valor de cada parcela
-          const valorParcela = valorTotal / numeroParcelasInt;
-          const datasVencimento = calcularDatasParcelamento(dataVencimento, numeroParcelasInt, frequenciaParcelamento);
-
-          // Gerar um UUID para agrupar as parcelas
-          const grupoParcelamentoId = uuidv4();
-          console.log('Grupo de parcelamento ID:', grupoParcelamentoId);
-
-          // Criar as contas parceladas
-          for (let i = 0; i < numeroParcelasInt; i++) {
-            const descricaoParcela = numeroParcelasInt > 1 
-              ? `${descricao} - Parcela ${i + 1}/${numeroParcelasInt}` 
-              : descricao;
-
-            const contaData = {
-              descricao: descricaoParcela,
-              valor: valorParcela,
-              data_vencimento: datasVencimento[i],
-              tipo: tipo,
-              status: status,
-              categoria_id: parseInt(categoriaId),
-              whatsapp: whatsapp || null,
-              grupo_parcelamento_id: grupoParcelamentoId
-            };
-
-            console.log(`Criando parcela ${i + 1}:`, contaData);
-            const resultado = await createConta(contaData);
-            console.log(`Parcela ${i + 1} criada com sucesso:`, resultado);
+        // Se o status mudou de 'recebida' para outro status, remover a entrada correspondente
+        if (conta.status === 'recebida' && status !== 'recebida') {
+          try {
+            const entradas = await getEntradas();
+            const entradaRelacionada = entradas.find(e => 
+              e.descricao.includes(`Recebimento - ${descricaoOriginal}`) && 
+              Math.abs(Number(e.valor) - Number(conta.valor)) < 0.01 // Tolerance for floating point comparison
+            );
+            
+            if (entradaRelacionada) {
+              await deleteEntrada(entradaRelacionada.id!);
+              console.log('Entrada relacionada excluída:', entradaRelacionada.id);
+              toast({
+                title: "Sucesso",
+                description: "Conta atualizada e entrada associada removida.",
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao excluir entrada relacionada:', error);
+            toast({
+              title: "Aviso",
+              description: "Falha ao excluir entrada relacionada. Pode ser necessário ajustar manualmente.",
+              variant: "destructive",
+            });
           }
-
-          toast({
-            title: "Sucesso",
-            description: `${numeroParcelasInt} parcelas registradas com sucesso!`,
-          });
-        } else {
-          // Criar nova conta única
-          console.log('Criando conta única');
-          
-          const contaData = {
-            descricao: descricao,
-            valor: valorTotal,
-            data_vencimento: dataVencimento,
-            tipo: tipo,
-            status: status,
-            categoria_id: parseInt(categoriaId),
-            whatsapp: whatsapp || null,
-            grupo_parcelamento_id: null
-          };
-
-          console.log('Dados da nova conta:', contaData);
-          const resultado = await createConta(contaData);
-          console.log('Conta única criada com sucesso:', resultado);
-          toast({
-            title: "Sucesso",
-            description: "Conta registrada com sucesso!",
-          });
+        }
+        // Se o status mudou de 'paga' para outro status, remover a saída correspondente
+        else if (conta.status === 'paga' && status !== 'paga') {
+          try {
+            const saidas = await getSaidas();
+            const saidaRelacionada = saidas.find(s => 
+              s.descricao.includes(`Pagamento - ${descricaoOriginal}`) && 
+              Math.abs(Number(s.valor) - Number(conta.valor)) < 0.01 // Tolerance for floating point comparison
+            );
+            
+            if (saidaRelacionada) {
+              await deleteSaida(saidaRelacionada.id!);
+              console.log('Saída relacionada excluída:', saidaRelacionada.id);
+              toast({
+                title: "Sucesso",
+                description: "Conta atualizada e saída associada removida.",
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao excluir saída relacionada:', error);
+            toast({
+              title: "Aviso",
+              description: "Falha ao excluir saída relacionada. Pode ser necessário ajustar manualmente.",
+              variant: "destructive",
+            });
+          }
+        }
+        // Se o status mudou para 'recebida' de outro status, criar a entrada correspondente
+        else if (status === 'recebida' && conta.status !== 'recebida') {
+          try {
+            // Verificar se já existe uma entrada correspondente para evitar duplicidade
+            const entradas = await getEntradas();
+            const entradaExistente = entradas.find(e => 
+              e.descricao.includes(`Recebimento - ${descricaoOriginal}`) && 
+              Math.abs(Number(e.valor) - Number(conta.valor)) < 0.01 // Tolerance for floating point comparison
+            );
+            
+            // Se não existe entrada correspondente, criar uma nova
+            if (!entradaExistente) {
+              await createEntrada({
+                descricao: `Recebimento - ${descricaoOriginal}`,
+                valor: Number(conta.valor),
+                data: new Date().toISOString().split('T')[0],
+                categoria_id: conta.categoria_id,
+                conta_financeira_id: conta.conta_financeira_id || null,
+                whatsapp: conta.whatsapp || null
+              });
+              console.log('Nova entrada criada para conta recebida');
+              toast({
+                title: "Sucesso",
+                description: "Conta marcada como recebida e entrada registrada.",
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao criar entrada relacionada:', error);
+            toast({
+              title: "Aviso",
+              description: "Falha ao criar entrada relacionada. Pode ser necessário ajustar manualmente.",
+              variant: "destructive",
+            });
+          }
+        }
+        // Se o status mudou para 'paga' de outro status, criar a saída correspondente
+        else if (status === 'paga' && conta.status !== 'paga') {
+          try {
+            // Verificar se já existe uma saída correspondente para evitar duplicidade
+            const saidas = await getSaidas();
+            const saidaExistente = saidas.find(s => 
+              s.descricao.includes(`Pagamento - ${descricaoOriginal}`) && 
+              Math.abs(Number(s.valor) - Number(conta.valor)) < 0.01 // Tolerance for floating point comparison
+            );
+            
+            // Se não existe saída correspondente, criar uma nova
+            if (!saidaExistente) {
+              await createSaida({
+                descricao: `Pagamento - ${descricaoOriginal}`,
+                valor: Number(conta.valor),
+                data: new Date().toISOString().split('T')[0],
+                categoria_id: conta.categoria_id,
+                conta_financeira_id: conta.conta_financeira_id || null,
+                whatsapp: conta.whatsapp || null
+              });
+              console.log('Nova saída criada para conta paga');
+              toast({
+                title: "Sucesso",
+                description: "Conta marcada como paga e saída registrada.",
+              });
+            }
+          } catch (error) {
+            console.error('Erro ao criar saída relacionada:', error);
+            toast({
+              title: "Aviso",
+              description: "Falha ao criar saída relacionada. Pode ser necessário ajustar manualmente.",
+              variant: "destructive",
+            });
+          }
         }
       }
 
